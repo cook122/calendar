@@ -25,7 +25,6 @@ jobs:
         with:
           java-version: '17'
           distribution: 'zulu'
-          cache: 'gradle'
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
