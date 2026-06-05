@@ -1,0 +1,6 @@
+{
+  "name": "Minimalist Calendar",
+  "description": "A elegant, minimalist calendar application focusing on daily task management with Feishu-style flexible recurring schedules.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

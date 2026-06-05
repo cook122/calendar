@@ -1,0 +1,8 @@
+{
+  "appId": "com.luminacalendar.app",
+  "appName": "Lumina Calendar",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}
