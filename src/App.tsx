@@ -156,6 +156,49 @@ function getDynamicPresetOptions(dateStr: string) {
   ];
 }
 
+// Safely wrapped localStorage helper to prevent SecurityError crashes in restricted webview environments
+const safeStorage = {
+  getItem(key: string): string | null {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        return localStorage.getItem(key);
+      }
+    } catch (e) {
+      console.warn('localStorage getItem failed, fell back to memory', e);
+    }
+    return (window as any).__lumina_memory_storage?.[key] || null;
+  },
+  setItem(key: string, value: string): void {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem(key, value);
+        return;
+      }
+    } catch (e) {
+      console.warn('localStorage setItem failed, fell back to memory', e);
+    }
+    if (typeof window !== 'undefined') {
+      if (!(window as any).__lumina_memory_storage) {
+        (window as any).__lumina_memory_storage = {};
+      }
+      (window as any).__lumina_memory_storage[key] = value;
+    }
+  },
+  removeItem(key: string): void {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.removeItem(key);
+        return;
+      }
+    } catch (e) {
+      console.warn('localStorage removeItem failed, fell back to memory', e);
+    }
+    if (typeof window !== 'undefined' && (window as any).__lumina_memory_storage) {
+      delete (window as any).__lumina_memory_storage[key];
+    }
+  }
+};
+
 export default function App() {
   // Get current system real today (user's actual local today date)
   const actualTodayStr = useMemo(() => formatLocalDate(new Date()), []);
@@ -176,14 +219,14 @@ export default function App() {
 
   // Initialize tasks from LocalStorage or seeded defaults
   const [tasks, setTasks] = useState<Task[]>(() => {
-    const stored = localStorage.getItem('lumina_calendar_tasks');
+    const stored = safeStorage.getItem('lumina_calendar_tasks');
     if (stored) {
       try {
         const parsed = JSON.parse(stored) as Task[];
         // Auto-clear old demo tasks to honor user request for empty slate immediately
         if (parsed.some(t => t.id === 'task-1' || t.id === 'task-2' || t.id === 'task-3' || t.id === 'task-4' || t.id === 'task-5')) {
-          localStorage.removeItem('lumina_calendar_tasks');
-          localStorage.removeItem('lumina_calendar_alerted_instances');
+          safeStorage.removeItem('lumina_calendar_tasks');
+          safeStorage.removeItem('lumina_calendar_alerted_instances');
           return [];
         }
         return parsed;
@@ -196,7 +239,7 @@ export default function App() {
 
   // Persist tasks whenever changed
   useEffect(() => {
-    localStorage.setItem('lumina_calendar_tasks', JSON.stringify(tasks));
+    safeStorage.setItem('lumina_calendar_tasks', JSON.stringify(tasks));
   }, [tasks]);
 
   // Calendar states
@@ -268,7 +311,7 @@ export default function App() {
   // Keep track of which (taskId-dateStr) combinations have already been notified
   const [alertedInstances, setAlertedInstances] = useState<string[]>(() => {
     try {
-      const stored = localStorage.getItem('lumina_calendar_alerted_instances');
+      const stored = safeStorage.getItem('lumina_calendar_alerted_instances');
       return stored ? JSON.parse(stored) : [];
     } catch {
       return [];
@@ -280,7 +323,7 @@ export default function App() {
 
   // Persist alertedInstances
   useEffect(() => {
-    localStorage.setItem('lumina_calendar_alerted_instances', JSON.stringify(alertedInstances));
+    safeStorage.setItem('lumina_calendar_alerted_instances', JSON.stringify(alertedInstances));
   }, [alertedInstances]);
 
   // Polling engine for reminders and alerts
@@ -786,8 +829,8 @@ export default function App() {
   const handleClearAllTasks = () => {
     if (window.confirm('确定要清空所有日程和测试数据吗？此操作不可撤销。')) {
       setTasks([]);
-      localStorage.removeItem('lumina_calendar_tasks');
-      localStorage.removeItem('lumina_calendar_alerted_instances');
+      safeStorage.removeItem('lumina_calendar_tasks');
+      safeStorage.removeItem('lumina_calendar_alerted_instances');
       setSelectedDateStr(actualTodayStr);
       setViewDate(parseLocalDate(actualTodayStr));
     }
