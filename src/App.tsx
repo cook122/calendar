@@ -204,20 +204,6 @@ export default function App() {
   // 当前日期（组件生命周期内固定不变，用于"今日"判断）
   const actualTodayStr = useMemo(() => formatLocalDate(new Date()), []);
 
-  // 顶部状态栏实时时钟（每秒更新）
-  const [statusBarTime, setStatusBarTime] = useState(() => {
-    const d = new Date();
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  });
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const d = new Date();
-      setStatusBarTime(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
   // 从 localStorage 初始化任务数据。
   // 若检测到旧版 demo 数据 (task-1 ~ task-5)，自动清空以防残留。
   const [tasks, setTasks] = useState<Task[]>(() => {
@@ -984,92 +970,65 @@ export default function App() {
     other: { label: '其他', bg: 'bg-[#F8FAFC]', text: 'text-[#475569]', border: 'border-[#E2E8F0]', dot: 'bg-slate-400' },
   };
 
-  const PRIORITY_LABELS = {
-    low: { label: '低优先级', text: 'text-gray-400 bg-gray-50 border-gray-100' },
-    medium: { label: '中等', text: 'text-blue-600 bg-blue-50/50 border-blue-100' },
-    high: { label: '高优先级 (!!)', text: 'text-white bg-slate-900 border-slate-900' }
-  };
 
   return (
-    <div className="min-h-screen w-full bg-[#EAEDF1] py-8 px-4 flex flex-col items-center justify-center font-sans select-none antialiased text-[#1A1A1A]">
-      {/* 手机外壳模拟 */}
-      <div className="relative max-w-sm w-full h-[830px] bg-white rounded-[44px] shadow-2xl border-[11px] border-[#1C1F22] overflow-hidden flex flex-col ring-8 ring-offset-4 ring-black/5" id="android-device-frame">
+    <div className="min-h-screen w-full bg-[#FAF9F6] flex flex-col font-sans select-none antialiased text-[#1A1A1A] relative overflow-hidden">
 
-        {/* 顶部状态栏（时间、刘海、信号） */}
-        <div className="absolute top-0 inset-x-0 h-8 bg-white z-50 flex items-center justify-between px-6 pointer-events-none">
-          <div className="text-[12px] font-semibold text-slate-800 font-mono tracking-tighter">{statusBarTime}</div>
-          <div className="w-16 h-4 bg-[#1C1F22] rounded-full mx-auto absolute left-1/2 -translate-x-1/2 top-1.5 flex items-center justify-center">
-            <div className="w-2 h-2 rounded-full bg-[#2D3136] mr-2"></div>
-            <div className="w-7 h-1 rounded-full bg-[#202326]"></div>
-          </div>
+      {/* 顶栏 — 标题 + 新建按钮 */}
+      <header className="px-5 pt-4 pb-3 bg-white border-b border-slate-100 shadow-sm flex items-center justify-between shrink-0">
+        <div className="flex flex-col">
           <div className="flex items-center gap-1.5">
-            <div className="w-3.5 h-3.5 flex items-center justify-center">
-              <span className="text-[8px] bg-emerald-500 text-white rounded-full px-0.5 scale-90 font-bold uppercase">5G</span>
-            </div>
-            <div className="w-4 h-2.5 bg-slate-800 rounded-sm relative scale-90">
-              <div className="absolute top-0.5 right-[-2px] w-[2px] h-[5px] bg-slate-800 rounded-r"></div>
-            </div>
+            <span className="w-2 h-2 rounded-full bg-slate-900 animate-pulse"></span>
+            <span className="text-[10px] uppercase tracking-widest text-[#8A94A6] font-mono">Lumina 白历</span>
           </div>
+          <h1 className="text-xl font-bold font-sans text-slate-950 tracking-tight">
+            {activeTab === 'calendar' ? '极简日常日历' : '待办任务看板'}
+          </h1>
         </div>
 
-        {/* 屏幕内容区域 */}
-        <div className="flex-1 pt-8 flex flex-col justify-between overflow-hidden bg-[#FAF9F6]" id="android-screen-content">
+        <button
+          onClick={() => openAddTask()}
+          className="w-9 h-9 bg-[#1E293B] hover:bg-black text-white rounded-full flex items-center justify-center transition-all shadow-md active:scale-95"
+          title="新建日程"
+        >
+          <Plus className="w-5 h-5" />
+        </button>
+      </header>
 
-          {/* 顶栏 — 标题 + 新建按钮 */}
-          <header className="px-5 pt-4 pb-3 bg-white border-b border-slate-100 shadow-sm flex items-center justify-between">
-            <div className="flex flex-col">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-slate-900 animate-pulse"></span>
-                <span className="text-[10px] uppercase tracking-widest text-[#8A94A6] font-mono">Lumina 白历</span>
+      {/* 主内容区 — 可滚动 */}
+      <div className="flex-1 overflow-y-auto px-4 py-3 relative styled-scrollbar">
+
+        {/* 视图1: 日历月视图 + 日时间线 */}
+        {activeTab === 'calendar' && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+            className="space-y-4"
+          >
+            {/* 月切换 + 网格 */}
+            <div className="bg-white rounded-2xl border border-slate-100 p-3.5 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-base font-bold text-slate-900 font-sans tracking-tight">{currentMonthLabel}</span>
+                <div className="flex items-center gap-1 bg-slate-50 rounded-lg p-0.5 border border-slate-200/50">
+                  <button onClick={handlePrevMonth} className="p-1 px-1.5 hover:bg-white rounded text-slate-600 transition-colors">
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => { setViewDate(parseLocalDate(actualTodayStr)); setSelectedDateStr(actualTodayStr); }} className="text-[10px] font-bold px-2 py-0.5 rounded hover:bg-white text-slate-800 font-sans transition-colors">
+                    本日
+                  </button>
+                  <button onClick={handleNextMonth} className="p-1 px-1.5 hover:bg-white rounded text-slate-600 transition-colors">
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-              <h1 className="text-xl font-bold font-sans text-slate-950 tracking-tight">
-                {activeTab === 'calendar' ? '极简日常日历' : '待办任务看板'}
-              </h1>
-            </div>
 
-            <button
-              onClick={() => openAddTask()}
-              className="w-9 h-9 bg-[#1E293B] hover:bg-black text-white rounded-full flex items-center justify-center transition-all shadow-md active:scale-95"
-              title="新建日程"
-            >
-              <Plus className="w-5 h-5" />
-            </button>
-          </header>
+              {/* 周表头：一 ~ 日 */}
+              <div className="grid grid-cols-7 text-center mb-1 text-[11px] font-semibold text-slate-400 font-sans tracking-wide">
+                <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+              </div>
 
-          {/* 主内容区 — 可滚动 */}
-          <div className="flex-1 overflow-y-auto px-4 py-3 relative styled-scrollbar">
-
-            {/* 视图1: 日历月视图 + 日时间线 */}
-            {activeTab === 'calendar' && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2 }}
-                className="space-y-4"
-              >
-                {/* 月切换 + 网格 */}
-                <div className="bg-white rounded-2xl border border-slate-100 p-3.5 shadow-sm">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-base font-bold text-slate-900 font-sans tracking-tight">{currentMonthLabel}</span>
-                    <div className="flex items-center gap-1 bg-slate-50 rounded-lg p-0.5 border border-slate-200/50">
-                      <button onClick={handlePrevMonth} className="p-1 px-1.5 hover:bg-white rounded text-slate-600 transition-colors">
-                        <ChevronLeft className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => { setViewDate(parseLocalDate(actualTodayStr)); setSelectedDateStr(actualTodayStr); }} className="text-[10px] font-bold px-2 py-0.5 rounded hover:bg-white text-slate-800 font-sans transition-colors">
-                        本日
-                      </button>
-                      <button onClick={handleNextMonth} className="p-1 px-1.5 hover:bg-white rounded text-slate-600 transition-colors">
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* 周表头：一 ~ 日 */}
-                  <div className="grid grid-cols-7 text-center mb-1 text-[11px] font-semibold text-slate-400 font-sans tracking-wide">
-                    <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
-                  </div>
-
-                  {/* 42 格日历网格 */}
+              {/* 42 格日历网格 */}
                   <div className="grid grid-cols-7 gap-y-2.5 text-center mt-2.5">
                     {calendarDays.map((cell, idx) => {
                       const hasTasks = dailyOccurrencesMap[cell.dateStr]?.length > 0;
@@ -1377,12 +1336,9 @@ export default function App() {
             </div>
 
             {/* 底部手势指示条 */}
-            <div className="w-32 h-1 bg-slate-900 rounded-full mx-auto mt-2 mb-1 opacity-70"></div>
           </footer>
 
-        </div>
-
-        {/* 弹窗1: 新建/编辑表单（底部滑出） */}
+          {/* 弹窗1: 新建/编辑表单（底部滑出） */}
         <AnimatePresence>
           {isAddSheetOpen && (
             <div className="absolute inset-0 bg-black/60 z-50 flex items-end justify-center">
@@ -2182,7 +2138,6 @@ export default function App() {
           )}
         </AnimatePresence>
 
-      </div>
     </div>
   );
 }
