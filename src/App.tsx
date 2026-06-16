@@ -239,7 +239,6 @@ export default function App() {
   // 底部弹出表单状态
   const [isAddSheetOpen, setIsAddSheetOpen] = useState<boolean>(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [formTab, setFormTab] = useState<'event' | 'birthday' | 'anniversary' | 'countdown'>('event');
 
   // 新建/编辑表单各字段
   const [taskTitle, setTaskTitle] = useState('');
@@ -561,17 +560,6 @@ export default function App() {
       setCategory(taskToEdit.category);
       setRemindMinutes(taskToEdit.remindMinutes !== undefined ? taskToEdit.remindMinutes : 15);
       setRingEnabled(taskToEdit.ringEnabled !== undefined ? taskToEdit.ringEnabled : true);
-
-      // Auto-detect matching segment tab for high fidelity
-      if (taskToEdit.title.includes('生日')) {
-        setFormTab('birthday');
-      } else if (taskToEdit.title.includes('纪念日')) {
-        setFormTab('anniversary');
-      } else if (taskToEdit.title.includes('倒数') || taskToEdit.title.includes('倒计时')) {
-        setFormTab('countdown');
-      } else {
-        setFormTab('event');
-      }
 
       const hasRecur = taskToEdit.recurrence.frequency !== 'none';
       setIsRecurring(hasRecur);
@@ -1109,8 +1097,6 @@ export default function App() {
                               ${isCompleted ? 'bg-slate-50/70 opacity-60' : 'hover:border-slate-300'}
                             `}
                           >
-                            {/* 左侧优先级色条 */}
-                            <div className={`absolute left-0 top-0 bottom-0 w-1 ${task.priority === 'high' ? 'bg-black' : task.priority === 'medium' ? 'bg-blue-400' : 'bg-slate-200'}`}></div>
 
                             {/* 勾选按钮 */}
                             <button
@@ -1129,9 +1115,6 @@ export default function App() {
                                 <h3 className={`text-sm font-bold tracking-tight text-slate-900 truncate ${isCompleted ? 'line-through text-slate-400' : ''}`}>
                                   {task.title}
                                 </h3>
-                                {task.priority === 'high' && !isCompleted && (
-                                  <span className="text-[9px] font-bold tracking-tighter text-white bg-rose-500 px-1 rounded-sm">重要</span>
-                                )}
                               </div>
 
                               {task.description && (
@@ -1267,11 +1250,8 @@ export default function App() {
                               </p>
                             )}
 
-                            {/* 优先级 / 时间 / 循环 */}
+                            {/* 时间 / 循环 */}
                             <div className="flex items-center gap-2 mt-2">
-                              <span className={`text-[9px] px-1 py-0.5 rounded uppercase font-bold tracking-tight ${task.priority === 'high' ? 'bg-black text-white' : 'bg-slate-100 text-slate-600'}`}>
-                                {task.priority === 'high' ? '高' : task.priority === 'medium' ? '中' : '低'}
-                              </span>
                               <span className="text-[10px] text-slate-400 font-mono">{task.timeEnabled ? task.startTime : '全天'}</span>
                               <span className="text-[9px] text-[#818CF8] bg-indigo-50/50 border border-indigo-100/50 px-1 py-0.5 rounded font-semibold font-sans">
                                 {task.recurrence.frequency !== 'none' ? '🔁 循环日程' : '● 单次'}
@@ -1376,62 +1356,6 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* 分段模板选择 */}
-                <div className="bg-white px-5 py-2.5 border-b border-slate-100 shrink-0">
-                  <div className="flex bg-[#EEEEF0] p-0.5 rounded-2xl text-[11px] font-bold">
-                    {(['event', 'birthday', 'anniversary', 'countdown'] as const).map((tab) => {
-                      const labels = {
-                        event: '日程',
-                        birthday: '生日',
-                        anniversary: '纪念日',
-                        countdown: '倒数日'
-                      };
-                      const isActive = formTab === tab;
-                      return (
-                        <button
-                          key={tab}
-                          type="button"
-                          onClick={() => {
-                            setFormTab(tab);
-                            if (tab === 'birthday') {
-                              setTaskTitle('🎂 妈妈的生日');
-                              setCategory('personal');
-                              setPresetType('yearly-day');
-                              setIsRecurring(true);
-                              setFrequency('yearly');
-                              setIntervalValue(1);
-                            } else if (tab === 'anniversary') {
-                              setTaskTitle('💖 结婚纪念日');
-                              setCategory('personal');
-                              setPresetType('yearly-day');
-                              setIsRecurring(true);
-                              setFrequency('yearly');
-                              setIntervalValue(1);
-                            } else if (tab === 'countdown') {
-                              setTaskTitle('📅 考研倒计时');
-                              setCategory('other');
-                              setPresetType('none');
-                              setIsRecurring(false);
-                            } else {
-                              setTaskTitle('');
-                              setCategory('work');
-                              setPresetType('none');
-                              setIsRecurring(false);
-                            }
-                          }}
-                          className={`flex-1 py-1.5 rounded-xl text-center font-bold tracking-tight transition-all duration-150 ${
-                            isActive 
-                              ? 'bg-white text-slate-900 shadow-xs' 
-                              : 'text-slate-500 hover:text-slate-800'
-                          }`}
-                        >
-                          {labels[tab]}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
                 {/* 表单区域 */}
                 <form
                   id="event-creation-form"
@@ -1446,12 +1370,7 @@ export default function App() {
                       <input 
                         type="text"
                         required
-                        placeholder={
-                          formTab === 'birthday' ? '谁的生日？例如：妈妈的生日 🎂' :
-                          formTab === 'anniversary' ? '什么纪念日？例如：入职周年纪念 💖' :
-                          formTab === 'countdown' ? '记下倒数大事件？例如：考研倒计时 📆' :
-                          '任务名称 (如: 飞书重复规则研讨会)'
-                        }
+                        placeholder="日程名称"
                         value={taskTitle}
                         onChange={e => setTaskTitle(e.target.value)}
                         className="w-full text-sm font-bold text-slate-900 border-none bg-transparent placeholder-slate-400 focus:outline-none p-0.5"
@@ -1558,30 +1477,6 @@ export default function App() {
                         <option value="habit">🌿 习惯培养 (Habit)</option>
                         <option value="other">☕ 其他待办 (Other)</option>
                       </select>
-                    </div>
-
-                    {/* 优先级 */}
-                    <div className="flex items-center justify-between p-3.5">
-                      <span className="text-xs font-bold text-slate-800">优先级等级</span>
-                      <div className="flex gap-1.5">
-                        {(['low', 'medium', 'high'] as TaskPriority[]).map(lvl => {
-                          const isSel = priority === lvl;
-                          return (
-                            <button
-                              type="button"
-                              key={lvl}
-                              onClick={() => setPriority(lvl)}
-                              className={`py-1 px-2.5 rounded-lg text-[10px] font-bold tracking-tight transition-all ${
-                                isSel
-                                  ? 'bg-slate-900 text-white'
-                                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                              }`}
-                            >
-                              {lvl === 'high' ? '🔥 高' : lvl === 'medium' ? '⚡ 中' : '☕ 低'}
-                            </button>
-                          );
-                        })}
-                      </div>
                     </div>
                   </div>
 
