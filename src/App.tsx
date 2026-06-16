@@ -4,15 +4,15 @@
  */
 
 /**
- * Lumina Calendar (智能飞书风高保真日程管理系统)
- * 
- * 核心设计与功能特性:
- * 1. 🎨 飞书级极致视觉美学 (全自适应流式网格、冷灰背景搭配磨砂卡片、高级无瑕白组件动效)
- * 2. ⏰ 系统/浏览器级桌面快捷通知 (Web Notification / Background Push) 开箱即用
- * 3. 🗣️ 语音与高保真和弦铃声提醒 (TTS 智能生成播报文本 + Web Audio 模拟丰盈泛音)
- * 4. 🔄 双向无限循环数字滚动时间滑轮 (Roller Time Picker) 突破原生 limits，支持 59 滚动至 00
- * 5. 🔁 永不中断无限期重复规则引擎 (Daily/Weekly/Monthly 极简高级任务生成及修改系统)
- * 6. 🗂️ 待办事项标签、分类筛选、日历/列表无缝双态切换及全周期本地持久化 (LocalStorage)
+ * Lumina Calendar — 飞书风日程管理系统
+ *
+ * 功能概览:
+ * - 月历 + 待办看板双视图
+ * - 循环日程引擎（每日/周/月/年 + 自定义间隔 + 结束条件）
+ * - 桌面 Web Notification 提醒 + Web Audio 和弦铃声
+ * - 双向无限循环滚轮时间选择器
+ * - 重复日程的精细删除控制（单次/后续/全部）
+ * - 全本地持久化 (localStorage + 降级内存)
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -51,10 +51,10 @@ import {
   generateOccurrences
 } from './utils/recurrenceEvaluator';
 
-// Clean slate: No preset mock data
+// Clean slate: 不留预设 mock 数据
 const DEFAULT_TASKS: Task[] = [];
 
-// Helper to generate dynamic user-friendly summaries in Chinese (Feishu Style)
+// 根据 RecurrenceRule 生成用户可读的中文摘要（类似飞书"重复说明"的展示）
 function getRecurrenceChineseSummary(recurrence: RecurrenceRule, baseDateStr: string): string {
   if (recurrence.frequency === 'none') {
     return '单次日程，不重复';
@@ -157,6 +157,7 @@ function getDynamicPresetOptions(dateStr: string) {
 }
 
 // Safely wrapped localStorage helper to prevent SecurityError crashes in restricted webview environments
+// 当 localStorage 不可用时（如 Capacitor WebView 受限模式），退化到内存存储
 const safeStorage = {
   getItem(key: string): string | null {
     try {
@@ -200,10 +201,10 @@ const safeStorage = {
 };
 
 export default function App() {
-  // Get current system real today (user's actual local today date)
+  // 当前日期（组件生命周期内固定不变，用于"今日"判断）
   const actualTodayStr = useMemo(() => formatLocalDate(new Date()), []);
 
-  // Dynamic top status bar clock matching real browser time
+  // 顶部状态栏实时时钟（每秒更新）
   const [statusBarTime, setStatusBarTime] = useState(() => {
     const d = new Date();
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -217,7 +218,8 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // Initialize tasks from LocalStorage or seeded defaults
+  // 从 localStorage 初始化任务数据。
+  // 若检测到旧版 demo 数据 (task-1 ~ task-5)，自动清空以防残留。
   const [tasks, setTasks] = useState<Task[]>(() => {
     const stored = safeStorage.getItem('lumina_calendar_tasks');
     if (stored) {
@@ -242,19 +244,18 @@ export default function App() {
     safeStorage.setItem('lumina_calendar_tasks', JSON.stringify(tasks));
   }, [tasks]);
 
-  // Calendar states
+  // 日历选择状态：选中日期 和 月历视图锚点
   const [selectedDateStr, setSelectedDateStr] = useState<string>(actualTodayStr);
   const [viewDate, setViewDate] = useState<Date>(() => parseLocalDate(actualTodayStr));
-  
-  // Navigation tabs (in-simulation phone UI)
+
   const [activeTab, setActiveTab] = useState<'calendar' | 'tasks'>('calendar');
 
-  // Bottom Add/Edit sheet state
+  // 底部弹出表单状态
   const [isAddSheetOpen, setIsAddSheetOpen] = useState<boolean>(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [formTab, setFormTab] = useState<'event' | 'birthday' | 'anniversary' | 'countdown'>('event');
 
-  // Form states for adding/editing task
+  // 新建/编辑表单各字段
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDesc, setTaskDesc] = useState('');
   const [taskBaseDate, setTaskBaseDate] = useState(actualTodayStr);
@@ -266,7 +267,7 @@ export default function App() {
   const [remindMinutes, setRemindMinutes] = useState<number>(15);
   const [ringEnabled, setRingEnabled] = useState<boolean>(true);
 
-  // Roller Time Picker States: 
+  // 时间滚轮选择器（双向无限循环）
   const [activeTimePicker, setActiveTimePicker] = useState<'start' | 'end' | null>(null);
   const [tempHour, setTempHour] = useState('09');
   const [tempMinute, setTempMinute] = useState('00');
@@ -274,9 +275,10 @@ export default function App() {
   const hourContainerRef = React.useRef<HTMLDivElement>(null);
   const minuteContainerRef = React.useRef<HTMLDivElement>(null);
 
-  // Sync scroll positions of vertical reels whenever the picker is opened or value is adjusted
+  // 滚轮打开时，自动滚动到当前选中值的位置（水平和垂直居中）
   useEffect(() => {
     if (activeTimePicker) {
+      // 延迟 50ms 确保弹窗 DOM 已渲染完成再滚动
       setTimeout(() => {
         const hIndex = parseInt(tempHour, 10);
         const hourContainer = hourContainerRef.current;
@@ -287,7 +289,7 @@ export default function App() {
             behavior: 'smooth'
           });
         }
-        
+
         const mIndex = parseInt(tempMinute, 10);
         const minuteContainer = minuteContainerRef.current;
         if (minuteContainer && minuteContainer.children[mIndex]) {
@@ -297,18 +299,18 @@ export default function App() {
             behavior: 'smooth'
           });
         }
-      }, 50); // Slight delay to ensure the modal container is rendered and sized
+      }, 50);
     }
   }, [activeTimePicker, tempHour, tempMinute]);
 
-  // Active Alert Trigger State
+  // 当前正在显示的提醒弹窗
   const [activeAlert, setActiveAlert] = useState<{
     task: Task;
     instanceDate: string;
     triggerTime: string;
   } | null>(null);
 
-  // Keep track of which (taskId-dateStr) combinations have already been notified
+  // 已通知过的实例集合，避免重复弹窗 (key = `${taskId}-${dateStr}`)
   const [alertedInstances, setAlertedInstances] = useState<string[]>(() => {
     try {
       const stored = safeStorage.getItem('lumina_calendar_alerted_instances');
@@ -318,7 +320,7 @@ export default function App() {
     }
   });
 
-  // Keep track of snoozed alert times (instanceKey -> timestamp)
+  // 已被用户"稍后提醒"的实例，value 为下次触发时间戳
   const [snoozedAlerts, setSnoozedAlerts] = useState<Record<string, number>>({});
 
   // Persist alertedInstances
@@ -326,9 +328,9 @@ export default function App() {
     safeStorage.setItem('lumina_calendar_alerted_instances', JSON.stringify(alertedInstances));
   }, [alertedInstances]);
 
-  // Polling engine for reminders and alerts
+  // 提醒轮询引擎：每 10 秒检查一次需要触发的提醒
   useEffect(() => {
-    // Also request browser Notification permissions on mount safely
+    // 首次挂载时请求浏览器通知权限
     if (typeof window !== 'undefined' && 'Notification' in window) {
       if (Notification.permission === 'default') {
         Notification.requestPermission();
@@ -337,92 +339,74 @@ export default function App() {
 
     const checkReminders = () => {
       const now = new Date();
-      // Format today date in YYYY-MM-DD
       const todayStr = formatLocalDate(now);
       const nowMs = now.getTime();
 
-      tasks.forEach(task => {
-        // Only tasks with timeEnabled are remindable
+      tasks.forEach((task) => {
         if (!task.timeEnabled || !task.startTime) return;
-        
-        // Skip if reminder is set to "无" (-1)
-        const offset = task.remindMinutes !== undefined ? task.remindMinutes : 15;
-        if (offset === -1) return;
 
-        // Is this task occurring today?
+        const offset = task.remindMinutes !== undefined ? task.remindMinutes : 15;
+        if (offset === -1) return; // -1 表示不提醒
+
         const { isOccurrence, isCompleted } = evaluateTaskOccurrence(task, todayStr);
         if (!isOccurrence || isCompleted) return;
 
-        // Task start time components
         const [startHour, startMin] = task.startTime.split(':').map(Number);
-        
-        // Exact start date-time for today's occurrence
         const eventTime = new Date(now);
         eventTime.setHours(startHour, startMin, 0, 0);
 
-        // Reminder trigger target time
         const reminderTime = new Date(eventTime.getTime() - offset * 60 * 1000);
         const reminderTimeMs = reminderTime.getTime();
 
-        // Instance unique key
         const instanceKey = `${task.id}-${todayStr}`;
 
-        // Check snooze limit first
+        // 如果用户点了"稍后提醒"，在 snooze 期间跳过
         const snoozeLimit = snoozedAlerts[instanceKey];
         if (snoozeLimit && nowMs < snoozeLimit) {
-          return; // Still in snooze wait period
+          return;
         }
 
-        // Is current moment >= reminder time, AND within 5 minutes window following it (to avoid old tasks triggering on reload)?
-        // AND not already alerted (unless snoozed limit is reached)!
-        const isTriggerActive = nowMs >= reminderTimeMs && (nowMs - reminderTimeMs < 5 * 60 * 1000);
-        
+        // 当前时间 >= 提醒时间，且差距不超过 5 分钟（防止页面刷新后触发旧提醒）
+        const isTriggerActive = nowMs >= reminderTimeMs && nowMs - reminderTimeMs < 5 * 60 * 1000;
+
         if (isTriggerActive) {
           const hasNotified = alertedInstances.includes(instanceKey);
           const snoozePassed = snoozeLimit && nowMs >= snoozeLimit;
 
           if (!hasNotified || snoozePassed) {
-            // Update state so we don't spam
             if (!hasNotified) {
-              setAlertedInstances(prev => [...prev, instanceKey]);
+              setAlertedInstances((prev) => [...prev, instanceKey]);
             }
-            
-            // If snoozed was met, clear it so it's not checked again unless snoozed again
+
+            // snooze 到期后清除，以便下次可再次 snooze
             if (snoozePassed) {
-              setSnoozedAlerts(prev => {
+              setSnoozedAlerts((prev) => {
                 const copy = { ...prev };
                 delete copy[instanceKey];
                 return copy;
               });
             }
 
-            // Open popup
+            // 打开应用内提醒弹窗
             setActiveAlert({
               task,
               instanceDate: todayStr,
               triggerTime: task.startTime,
             });
 
-            // Trigger system desktop/mobile Web Notification if permitted
-            if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-              try {
-                new Notification(`⏰ 飞书日程提醒: ${task.title}`, {
-                  body: `时间: ${task.startTime}${offset > 0 ? ` (已提前 ${offset} 分钟提醒)` : ' (开始时间)'}\n优先等级: ${task.priority === 'high' ? '高 🔥' : task.priority === 'medium' ? '中 ⚡' : '低 ☕'}\n备注: ${task.description || '无'}`,
-                  tag: instanceKey,
-                  requireInteraction: true
-                });
-              } catch (e) {
-                console.error(e);
-              }
-            }
-
-            // Play nice synthesized sound and voice cue
+            // Web Audio 和弦铃声
+            // 注意：在 Android WebView 中，AudioContext 创建于非用户交互回调时会处于
+            // "suspended" 状态，必须调 resume() 才能播放
             if (task.ringEnabled !== false) {
-              // 1. Chime beep sound using AudioContext
               try {
                 const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
                 if (AudioContextClass) {
                   const ctx = new AudioContextClass();
+                  // 关键：恢复被挂起的 AudioContext，否则不会出声
+                  if (ctx.state === 'suspended') {
+                    ctx.resume();
+                  }
+
                   const playBeep = (freq: number, delay: number, duration: number) => {
                     setTimeout(() => {
                       const osc = ctx.createOscillator();
@@ -438,22 +422,45 @@ export default function App() {
                     }, delay * 1000);
                   };
 
-                  playBeep(523.25, 0.0, 0.4); // C5
-                  playBeep(659.25, 0.2, 0.4); // E5
-                  playBeep(783.99, 0.4, 0.6); // G5
+                  // C5 → E5 → G5 和弦
+                  playBeep(523.25, 0.0, 0.4);
+                  playBeep(659.25, 0.2, 0.4);
+                  playBeep(783.99, 0.4, 0.6);
                 }
               } catch (soundErr) {
                 console.warn('Web Audio chime not supported:', soundErr);
               }
+            }
 
-              // Speech synthesis voice broadcast was requested to be removed
+            // 浏览器桌面通知（仅在安全上下文 HTTPS 下才会生效）
+            // Capacitor Android WebView 中因非 HTTPS，此路不通。
+            // 如需 Android 系统通知栏通知，需安装 @capacitor/local-notifications：
+            //   npm install @capacitor/local-notifications
+            //   npx cap sync
+            // 然后替换下方代码为：
+            //   import { LocalNotifications } from '@capacitor/local-notifications';
+            //   LocalNotifications.schedule({ notifications: [{ title, body, id, ... }] });
+            if (
+              typeof window !== 'undefined' &&
+              'Notification' in window &&
+              window.isSecureContext &&
+              Notification.permission === 'granted'
+            ) {
+              try {
+                new Notification(`⏰ 日程提醒: ${task.title}`, {
+                  body: `时间: ${task.startTime}${offset > 0 ? ` (已提前 ${offset} 分钟提醒)` : ' (开始时间)'}\n优先级: ${task.priority === 'high' ? '高 🔥' : task.priority === 'medium' ? '中 ⚡' : '低 ☕'}\n备注: ${task.description || '无'}`,
+                  tag: instanceKey,
+                  requireInteraction: true,
+                });
+              } catch (e) {
+                console.error(e);
+              }
             }
           }
         }
       });
     };
 
-    // Run check immediately on mount and then every 10 seconds
     checkReminders();
     const intervalId = setInterval(checkReminders, 10000);
 
@@ -473,27 +480,24 @@ export default function App() {
   const [endDate, setEndDate] = useState('2026-12-31');
   const [endCount, setEndCount] = useState<number>(10);
 
-  // Exception/Delete overlay options
+  // 循环日程删除确认弹窗状态
   const [selectedTaskForDelete, setSelectedTaskForDelete] = useState<{ task: Task; dateStr: string } | null>(null);
 
   // Filter category in tasks view
   const [categoryFilter, setCategoryFilter] = useState<'all' | TaskCategory>('all');
 
-  // Standard 6x7 days generator for calendar month View
+  // 标准 6×7 日历网格生成器（以周一为列首）
   const calendarDays = useMemo(() => {
     const year = viewDate.getFullYear();
     const month = viewDate.getMonth();
     
     // First day of current month
     const firstDay = new Date(year, month, 1, 12, 0, 0);
-    // Day of the week for first day (0=Sunday, 1=Monday...)
     const firstDayOfWeek = firstDay.getDay();
-    
-    // To align with Monday as the first column of the week:
-    // If firstDay is Mon(1), days from prev month to show = 0.
-    // If firstDay is Tue(2), days from prev month to show = 1.
-    // ...
-    // If firstDay is Sun(0), days from prev month to show = 6.
+
+    // 计算月首是周几，确定需要从上月补几天
+    // 周一为第一列，所以：
+    //   月首周一 → 补 0 天；月首周二 → 补 1 天；...；月首周日 → 补 6 天
     const daysFromPrev = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
     
     const days: { date: Date; dateStr: string; isCurrentMonth: boolean; isToday: boolean }[] = [];
@@ -517,7 +521,7 @@ export default function App() {
     return days;
   }, [viewDate, actualTodayStr]);
 
-  // Compute tasks having occurrences on each generated day in calendarDays
+  // 计算每个日历日期上的任务（用于月历格子的圆点指示器）
   const dailyOccurrencesMap = useMemo(() => {
     const map: Record<string, { task: Task; isCompleted: boolean }[]> = {};
     
@@ -535,17 +539,17 @@ export default function App() {
     return map;
   }, [calendarDays, tasks]);
 
-  // List of occurred tasks on the *selected date*
+  // 选中日期上的任务列表（按优先级→时间排序）
   const selectedDateTasks = useMemo(() => {
     const list: { task: Task; isCompleted: boolean }[] = [];
-    tasks.forEach(task => {
+    tasks.forEach((task) => {
       const { isOccurrence, isCompleted } = evaluateTaskOccurrence(task, selectedDateStr);
       if (isOccurrence) {
         list.push({ task, isCompleted });
       }
     });
 
-    // Sort by: priority (high -> medium -> low), then timeline start time
+    // 排序：高优先级优先 → 有时刻的优先 → 按开始时间先后
     return list.sort((a, b) => {
       const priorityWeights = { high: 3, medium: 2, low: 1 };
       const weightDiff = priorityWeights[b.task.priority] - priorityWeights[a.task.priority];
@@ -553,11 +557,11 @@ export default function App() {
       if (a.task.timeEnabled && b.task.timeEnabled) {
         return (a.task.startTime || '').localeCompare(b.task.startTime || '');
       }
-      return a.task.timeEnabled ? -1 : 1; // All-day tasks go underneath or on top. Standard: let timed events be sorted
+      return a.task.timeEnabled ? -1 : 1;
     });
   }, [tasks, selectedDateStr]);
 
-  // Open task creator/editor
+  // 打开新建/编辑表单。传入 taskToEdit 则为编辑模式，否则新建。
   const openAddTask = (taskToEdit?: Task) => {
     if (taskToEdit) {
       setEditingTask(taskToEdit);
@@ -626,7 +630,7 @@ export default function App() {
     setIsAddSheetOpen(true);
   };
 
-  // Handle saving the task
+  // 保存新建/编辑的任务。根据 presetType 将快捷选项转为 RecurrenceRule 结构。
   const handleSaveTask = (e: React.FormEvent) => {
     e.preventDefault();
     if (!taskTitle.trim()) return;
@@ -742,7 +746,7 @@ export default function App() {
     setEditingTask(null);
   };
 
-  // Toggle completion of a task on the current selected date
+  // 切换任务完成状态。循环日程用 completedInstances 标记单次完成，非循环用 completed。
   const handleToggleComplete = (task: Task) => {
     if (task.recurrence.frequency === 'none') {
       // Single occurrence task
@@ -768,7 +772,7 @@ export default function App() {
     }
   };
 
-  // Perform delete on occurrence level (exception instance) OR series level
+  // "仅此日程"：将当前日期加入 deletedInstances，保留系列中其他实例
   const handleDeleteOccurrenceOnly = () => {
     if (!selectedTaskForDelete) return;
     const { task, dateStr } = selectedTaskForDelete;
@@ -787,6 +791,10 @@ export default function App() {
     setSelectedTaskForDelete(null);
   };
 
+  // "此日程及后续"：将截至日期设为当前日期的前一天
+  // 若删除的是第一个实例，等价于删除整个系列
+  // 选择前一天作为 endDate 是因为 generateOccurrences 使用 endDate 作为硬上限，
+  // 目标日 (dateStr) 当天不会被包含，以此达到"从今天起停止"的效果
   const handleDeleteThisAndFollowing = () => {
     if (!selectedTaskForDelete) return;
     const { task, dateStr } = selectedTaskForDelete;
@@ -817,6 +825,7 @@ export default function App() {
     setSelectedTaskForDelete(null);
   };
 
+  // "所有日程"：直接从 tasks 数组中删除该任务
   const handleDeleteEntireSeries = () => {
     if (!selectedTaskForDelete) return;
     const { task } = selectedTaskForDelete;
@@ -825,7 +834,7 @@ export default function App() {
     setSelectedTaskForDelete(null);
   };
 
-  // Clear all tasks
+  // 清空所有数据（含提醒记录），刷新到今日
   const handleClearAllTasks = () => {
     if (window.confirm('确定要清空所有日程和测试数据吗？此操作不可撤销。')) {
       setTasks([]);
@@ -836,9 +845,8 @@ export default function App() {
     }
   };
 
-  // Month slider handlers
   const handlePrevMonth = () => {
-    setViewDate(prev => {
+    setViewDate((prev) => {
       const date = new Date(prev);
       date.setMonth(date.getMonth() - 1);
       return date;
@@ -846,14 +854,14 @@ export default function App() {
   };
 
   const handleNextMonth = () => {
-    setViewDate(prev => {
+    setViewDate((prev) => {
       const date = new Date(prev);
       date.setMonth(date.getMonth() + 1);
       return date;
     });
   };
 
-  // Weekday multiselect handler for Weekly recurrence
+  // 周重复中的星期多选，至少保留一个选中
   const toggleWeekday = (dayIdx: number) => {
     setWeekdays(prev => {
       if (prev.includes(dayIdx)) {
@@ -867,7 +875,7 @@ export default function App() {
 
   const currentMonthLabel = `${viewDate.getFullYear()}年 ${viewDate.getMonth() + 1}月`;
 
-  // Filter tasks computed list for Task Tab
+  // 当月所有任务的实例列表（任务看板视图用）
   const allTasksOccurrences = useMemo(() => {
     // Collect all valid occurrences for all tasks in the current view's month for a unified checklist
     const year = viewDate.getFullYear();
@@ -899,7 +907,7 @@ export default function App() {
     return list.sort((a, b) => a.dateStr.localeCompare(b.dateStr));
   }, [tasks, categoryFilter, viewDate]);
 
-  // Recurrence rule builder preview sentence
+  // 重复规则预览文本（根据表单当前选项实时生成）
   const liveRecurrencePreview = useMemo(() => {
     const currentBaseDate = parseLocalDate(taskBaseDate);
     const dayOfWeek = currentBaseDate.getDay();
@@ -968,7 +976,7 @@ export default function App() {
     return getRecurrenceChineseSummary(dummyRecurrence, taskBaseDate);
   }, [presetType, frequency, interval, weekdays, monthlyType, nthWeek, nthWeekday, taskBaseDate]);
 
-  // Category tags definitions
+  // 分类标签样式映射表
   const CATEGORY_STYLES: Record<TaskCategory, { label: string; bg: string; text: string; border: string; dot: string }> = {
     work: { label: '工作', bg: 'bg-[#F4F6F9]', text: 'text-[#1E293B]', border: 'border-[#E2E8F0]', dot: 'bg-black' },
     personal: { label: '个人', bg: 'bg-[#FAF5FF]', text: 'text-[#6B21A8]', border: 'border-[#F3E8FF]', dot: 'bg-purple-500' },
@@ -984,10 +992,10 @@ export default function App() {
 
   return (
     <div className="min-h-screen w-full bg-[#EAEDF1] py-8 px-4 flex flex-col items-center justify-center font-sans select-none antialiased text-[#1A1A1A]">
-      {/* Outer elegant smartphone frame simulation */}
+      {/* 手机外壳模拟 */}
       <div className="relative max-w-sm w-full h-[830px] bg-white rounded-[44px] shadow-2xl border-[11px] border-[#1C1F22] overflow-hidden flex flex-col ring-8 ring-offset-4 ring-black/5" id="android-device-frame">
-        
-        {/* Android Notch / Ear Speaker and Camera bar at top */}
+
+        {/* 顶部状态栏（时间、刘海、信号） */}
         <div className="absolute top-0 inset-x-0 h-8 bg-white z-50 flex items-center justify-between px-6 pointer-events-none">
           <div className="text-[12px] font-semibold text-slate-800 font-mono tracking-tighter">{statusBarTime}</div>
           <div className="w-16 h-4 bg-[#1C1F22] rounded-full mx-auto absolute left-1/2 -translate-x-1/2 top-1.5 flex items-center justify-center">
@@ -1004,10 +1012,10 @@ export default function App() {
           </div>
         </div>
 
-        {/* Dynamic Android Home Content Screen container */}
+        {/* 屏幕内容区域 */}
         <div className="flex-1 pt-8 flex flex-col justify-between overflow-hidden bg-[#FAF9F6]" id="android-screen-content">
-          
-          {/* Calendar Mode / Task Management Header */}
+
+          {/* 顶栏 — 标题 + 新建按钮 */}
           <header className="px-5 pt-4 pb-3 bg-white border-b border-slate-100 shadow-sm flex items-center justify-between">
             <div className="flex flex-col">
               <div className="flex items-center gap-1.5">
@@ -1019,8 +1027,8 @@ export default function App() {
               </h1>
             </div>
 
-            <button 
-              onClick={() => openAddTask()} 
+            <button
+              onClick={() => openAddTask()}
               className="w-9 h-9 bg-[#1E293B] hover:bg-black text-white rounded-full flex items-center justify-center transition-all shadow-md active:scale-95"
               title="新建日程"
             >
@@ -1028,18 +1036,18 @@ export default function App() {
             </button>
           </header>
 
-          {/* Main Module Content Area */}
+          {/* 主内容区 — 可滚动 */}
           <div className="flex-1 overflow-y-auto px-4 py-3 relative styled-scrollbar">
-            
-            {/* VIEW 1: Calendar Day Timeline Index */}
+
+            {/* 视图1: 日历月视图 + 日时间线 */}
             {activeTab === 'calendar' && (
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.2 }}
                 className="space-y-4"
               >
-                {/* Visual Month Selector */}
+                {/* 月切换 + 网格 */}
                 <div className="bg-white rounded-2xl border border-slate-100 p-3.5 shadow-sm">
                   <div className="flex items-center justify-between mb-4">
                     <span className="text-base font-bold text-slate-900 font-sans tracking-tight">{currentMonthLabel}</span>
@@ -1056,12 +1064,12 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Calendar Grid Weekdays Header Header */}
+                  {/* 周表头：一 ~ 日 */}
                   <div className="grid grid-cols-7 text-center mb-1 text-[11px] font-semibold text-slate-400 font-sans tracking-wide">
                     <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
                   </div>
 
-                  {/* 42 grid cells */}
+                  {/* 42 格日历网格 */}
                   <div className="grid grid-cols-7 gap-y-2.5 text-center mt-2.5">
                     {calendarDays.map((cell, idx) => {
                       const hasTasks = dailyOccurrencesMap[cell.dateStr]?.length > 0;
@@ -1069,8 +1077,8 @@ export default function App() {
                       const isSelected = cell.dateStr === selectedDateStr;
 
                       return (
-                        <div 
-                          key={idx} 
+                        <div
+                          key={idx}
                           onClick={() => setSelectedDateStr(cell.dateStr)}
                           className="relative flex flex-col items-center justify-center cursor-pointer group"
                         >
@@ -1083,7 +1091,7 @@ export default function App() {
                             {cell.date.getDate()}
                           </div>
 
-                          {/* Task Indicator Dot */}
+                          {/* 日程小圆点指示器 */}
                           {hasTasks && (
                             <span className={`
                               absolute bottom-0 w-1.5 h-1.5 rounded-full transition-all
@@ -1096,7 +1104,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Date Header for Daily Timeline List */}
+                {/* 选中日期的时间线 */}
                 <div className="flex items-center justify-between px-1">
                   <div className="flex flex-col">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-[#8A94A6] font-mono">TIMELINE</span>
@@ -1109,18 +1117,18 @@ export default function App() {
                   </span>
                 </div>
 
-                {/* Daily occurrences list */}
+                {/* 日任务列表 */}
                 <div className="space-y-2.5">
                   <AnimatePresence mode="popLayout">
                     {selectedDateTasks.length === 0 ? (
-                      <motion.div 
+                      <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         className="bg-white rounded-2xl border border-dashed border-slate-200 p-8 text-center text-slate-400 text-xs flex flex-col items-center justify-center gap-2"
                       >
                         <HelpCircle className="w-8 h-8 text-slate-300 stroke-[1.5]" />
                         <span>所选日期尚无任何已安排日程。</span>
-                        <button 
+                        <button
                           onClick={() => openAddTask()}
                           className="mt-1 text-[11px] font-semibold text-slate-800 underline underline-offset-2 hover:text-[#1A1A1A]"
                         >
@@ -1131,7 +1139,7 @@ export default function App() {
                       selectedDateTasks.map(({ task, isCompleted }) => {
                         const style = CATEGORY_STYLES[task.category];
                         return (
-                          <motion.div 
+                          <motion.div
                             key={task.id}
                             layout
                             initial={{ opacity: 0, scale: 0.98 }}
@@ -1142,11 +1150,11 @@ export default function App() {
                               ${isCompleted ? 'bg-slate-50/70 opacity-60' : 'hover:border-slate-300'}
                             `}
                           >
-                            {/* Left Active Priority Strip */}
+                            {/* 左侧优先级色条 */}
                             <div className={`absolute left-0 top-0 bottom-0 w-1 ${task.priority === 'high' ? 'bg-black' : task.priority === 'medium' ? 'bg-blue-400' : 'bg-slate-200'}`}></div>
 
-                            {/* Circular Task Status Checkbox */}
-                            <button 
+                            {/* 勾选按钮 */}
+                            <button
                               onClick={() => handleToggleComplete(task)}
                               className={`
                                 mt-1 w-5 h-5 rounded-full border flex items-center justify-center transition-all cursor-pointer shrink-0
@@ -1156,13 +1164,12 @@ export default function App() {
                               {isCompleted && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                             </button>
 
-                            {/* Task Info Body */}
+                            {/* 任务信息 */}
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center justify-between gap-2">
                                 <h3 className={`text-sm font-bold tracking-tight text-slate-900 truncate ${isCompleted ? 'line-through text-slate-400' : ''}`}>
                                   {task.title}
                                 </h3>
-                                {/* Small visual priority indicator for inline display */}
                                 {task.priority === 'high' && !isCompleted && (
                                   <span className="text-[9px] font-bold tracking-tighter text-white bg-rose-500 px-1 rounded-sm">重要</span>
                                 )}
@@ -1174,7 +1181,7 @@ export default function App() {
                                 </p>
                               )}
 
-                              {/* Time and Feishu Recurrence summary lines */}
+                              {/* 时间 / 循环 / 分类 */}
                               <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-2.5">
                                 <div className="flex items-center gap-1 text-[10px] font-semibold text-slate-400 font-mono">
                                   <Clock className="w-3 h-3 text-slate-400" />
@@ -1200,16 +1207,16 @@ export default function App() {
                               </div>
                             </div>
 
-                            {/* Task Action Panel: Edit Entire / Delete Occurrence */}
+                            {/* 编辑 / 删除按钮 */}
                             <div className="flex items-center gap-1 pl-2 shrink-0 self-center">
-                              <button 
+                              <button
                                 onClick={() => openAddTask(task)}
                                 className="p-1 hover:bg-slate-100 rounded text-slate-500 hover:text-slate-900 transition-colors"
                                 title="编辑整个日程"
                               >
                                 <Settings className="w-3.5 h-3.5" />
                               </button>
-                              <button 
+                              <button
                                 onClick={() => setSelectedTaskForDelete({ task, dateStr: selectedDateStr })}
                                 className="p-1 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600 transition-colors"
                                 title="处理/删除日程"
@@ -1226,15 +1233,15 @@ export default function App() {
               </motion.div>
             )}
 
-            {/* VIEW 2: Tasks Checklist Board */}
+            {/* 视图2: 待办看板 */}
             {activeTab === 'tasks' && (
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.15 }}
                 className="space-y-4"
               >
-                {/* Board Category Quick Filter Selection list */}
+                {/* 分类筛选 */}
                 <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full styled-scrollbar">
                   <button 
                     onClick={() => setCategoryFilter('all')}
@@ -1262,7 +1269,7 @@ export default function App() {
                   })}
                 </div>
 
-                {/* Main 30-day index board list */}
+                {/* 当月任务列表 */}
                 <div className="space-y-3">
                   {allTasksOccurrences.length === 0 ? (
                     <div className="bg-white rounded-3xl border border-slate-100 p-12 text-center text-slate-400 text-xs flex flex-col items-center justify-center gap-2">
@@ -1272,18 +1279,18 @@ export default function App() {
                   ) : (
                     allTasksOccurrences.map(({ id, task, dateStr, isCompleted }) => {
                       const style = CATEGORY_STYLES[task.category];
-                      const [yr, mth, dy] = dateStr.split('-');
+                      const [, mth, dy] = dateStr.split('-');
                       const displayDateStr = `${mth}/${dy}`;
 
                       return (
-                        <div 
+                        <div
                           key={id}
                           className={`
                             bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex items-start gap-3 transition-all relative overflow-hidden
                             ${isCompleted ? 'bg-slate-50/80 opacity-60' : 'hover:border-slate-300'}
                           `}
                         >
-                          {/* Floating localized small date flag */}
+                          {/* 日期徽标 */}
                           <div className="bg-slate-100/80 border border-slate-200/50 rounded-lg px-2 py-1 flex flex-col items-center justify-center shrink-0 w-11 h-11 text-slate-700 font-mono">
                             <span className="text-[11px] font-bold leading-none">{displayDateStr}</span>
                             <span className="text-[8px] scale-90 font-bold opacity-60 uppercase mt-0.5">周{['日','一','二','三','四','五','六'][parseLocalDate(dateStr).getDay()]}</span>
@@ -1296,12 +1303,12 @@ export default function App() {
                               </h4>
                             </div>
                             {task.description && (
-                              <p className={`text-[11px] mt-0.5 text-slate-400 text-slate-400 truncate ${isCompleted ? 'line-through' : ''}`}>
+                              <p className={`text-[11px] mt-0.5 text-slate-400 truncate ${isCompleted ? 'line-through' : ''}`}>
                                 {task.description}
                               </p>
                             )}
 
-                            {/* Footer parameters */}
+                            {/* 优先级 / 时间 / 循环 */}
                             <div className="flex items-center gap-2 mt-2">
                               <span className={`text-[9px] px-1 py-0.5 rounded uppercase font-bold tracking-tight ${task.priority === 'high' ? 'bg-black text-white' : 'bg-slate-100 text-slate-600'}`}>
                                 {task.priority === 'high' ? '高' : task.priority === 'medium' ? '中' : '低'}
@@ -1347,25 +1354,9 @@ export default function App() {
                 </div>
               </motion.div>
             )}
-
-            {/* Helper Quick Utilities outside tabs */}
-            <div className="mt-8 pt-4 border-t border-slate-100/60 pb-16 text-center space-y-2">
-              <p className="text-[10px] text-slate-400 leading-normal">
-                📱 模拟运行于 Android 14 系统
-              </p>
-              <div className="flex items-center justify-center gap-3">
-                <button 
-                  onClick={handleClearAllTasks}
-                  className="text-[10px] font-bold text-red-600 bg-red-50 hover:bg-red-100 transition-all px-2.5 py-1.5 rounded-lg border border-red-100/50 flex items-center gap-1 cursor-pointer"
-                >
-                  🗑️ 清空所有日程和测试数据
-                </button>
-              </div>
-            </div>
-
           </div>
 
-          {/* Android Navigation Bar Gestures Pill Bottom Container */}
+          {/* 底部导航栏 */}
           <footer className="bg-white border-t border-slate-100 pb-2 pt-1 flex flex-col z-40">
             <div className="h-12 px-6 flex items-center justify-around">
               <button 
@@ -1385,32 +1376,32 @@ export default function App() {
               </button>
             </div>
 
-            {/* Android Gesture Bottom Pill Navigation Bar Indicator */}
+            {/* 底部手势指示条 */}
             <div className="w-32 h-1 bg-slate-900 rounded-full mx-auto mt-2 mb-1 opacity-70"></div>
           </footer>
 
         </div>
 
-        {/* MODAL 1: Sliding Sheets panel for Adding or Editing Scheduled Tasks */}
+        {/* 弹窗1: 新建/编辑表单（底部滑出） */}
         <AnimatePresence>
           {isAddSheetOpen && (
             <div className="absolute inset-0 bg-black/60 z-50 flex items-end justify-center">
-              <motion.div 
+              <motion.div
                 initial={{ y: '100%' }}
                 animate={{ y: 0 }}
                 exit={{ y: '100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 220 }}
                 className="w-full bg-white rounded-t-[32px] max-h-[92%] flex flex-col overflow-hidden"
               >
-                
-                {/* Panel Slider Header handles drag gesture feel */}
+
+                {/* 拖拽手柄 */}
                 <div className="h-8 flex items-center justify-center shrink-0 border-b border-slate-100">
                   <div className="w-12 h-1.5 bg-slate-200 rounded-full"></div>
                 </div>
 
-                {/* Navigation and Action Header matching reference mockup */}
+                {/* 顶栏 — 取消 / 完成 */}
                 <div className="flex items-center justify-between px-5 py-3.5 bg-white border-b border-slate-100 shrink-0">
-                  <button 
+                  <button
                     type="button"
                     onClick={() => { setIsAddSheetOpen(false); setEditingTask(null); }}
                     className="text-[#007AFF] hover:opacity-80 text-sm font-medium transition-opacity"
@@ -1420,7 +1411,7 @@ export default function App() {
                   <span className="text-sm font-bold text-slate-900 font-sans tracking-tight">
                     {editingTask ? '修改日程规则' : '新建日程'}
                   </span>
-                  <button 
+                  <button
                     type="submit"
                     form="event-creation-form"
                     className="text-[#007AFF] hover:opacity-80 text-sm font-bold transition-opacity"
@@ -1429,7 +1420,7 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Segment tabs (日程, 生日, 纪念日, 倒数日) matching reference mockup perfectly */}
+                {/* 分段模板选择 */}
                 <div className="bg-white px-5 py-2.5 border-b border-slate-100 shrink-0">
                   <div className="flex bg-[#EEEEF0] p-0.5 rounded-2xl text-[11px] font-bold">
                     {(['event', 'birthday', 'anniversary', 'countdown'] as const).map((tab) => {
@@ -1485,14 +1476,14 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Form container scroll area utilizing beautiful iOS/Android light grey canvas background */}
-                <form 
+                {/* 表单区域 */}
+                <form
                   id="event-creation-form"
-                  onSubmit={handleSaveTask} 
+                  onSubmit={handleSaveTask}
                   className="flex-1 overflow-y-auto bg-[#F2F2F7] p-4 space-y-4 styled-scrollbar"
                 >
-                  
-                  {/* CARD 1: Event Title & Note Fields */}
+
+                  {/* 卡片1: 标题 + 备注 */}
                   <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 space-y-3">
                     <div className="space-y-1">
                       <label className="text-[9px] font-bold uppercase tracking-wider text-[#8A94A6] block">日程名称</label>
@@ -1523,13 +1514,13 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* CARD 2: Dates, Times, Location and Categories */}
+                  {/* 卡片2: 日期 / 时间 / 分类 / 优先级 */}
                   <div className="bg-white rounded-2xl shadow-sm border border-slate-100 divide-y divide-slate-100 overflow-hidden">
-                    
-                    {/* All-Day Switch Row (全天) */}
+
+                    {/* 全天开关 */}
                     <div className="flex items-center justify-between p-3.5">
                       <span className="text-xs font-bold text-slate-800">全天</span>
-                      <button 
+                      <button
                         type="button"
                         onClick={() => setTimeEnabled(prev => !prev)}
                         className={`w-10 h-5.5 rounded-full p-0.5 transition-colors duration-200 ease-in-out focus:outline-none ${
@@ -1542,18 +1533,18 @@ export default function App() {
                       </button>
                     </div>
 
-                    {/* Start Date & Time picker Row */}
+                    {/* 开始日期 + 时间 */}
                     <div className="flex items-center justify-between p-3.5">
                       <span className="text-xs font-bold text-slate-800">开始</span>
                       <div className="flex items-center gap-1.5 font-sans">
-                        <input 
+                        <input
                           type="date"
                           value={taskBaseDate}
                           onChange={e => setTaskBaseDate(e.target.value)}
                           className="rounded-lg bg-slate-50 hover:bg-slate-100 p-1 px-2 text-xs font-bold text-slate-800 font-mono focus:outline-none border-none text-center cursor-pointer"
                         />
                         {timeEnabled && (
-                          <button 
+                          <button
                             type="button"
                             onClick={() => {
                               const [h, m] = startTime.split(':');
@@ -1570,18 +1561,18 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* End Date & Time picker Row */}
+                    {/* 结束日期 + 时间 */}
                     <div className="flex items-center justify-between p-3.5">
                       <span className="text-xs font-bold text-slate-800">结束</span>
                       <div className="flex items-center gap-1.5 font-sans">
-                        <input 
+                        <input
                           type="date"
                           value={taskBaseDate}
                           disabled
                           className="rounded-lg bg-slate-50 p-1 px-2 text-xs font-semibold text-slate-400 font-mono border-none text-center opacity-60"
                         />
                         {timeEnabled && (
-                          <button 
+                          <button
                             type="button"
                             onClick={() => {
                               const [h, m] = endTime.split(':');
@@ -1598,10 +1589,10 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Category Class Switch Row (日历分类) */}
+                    {/* 日历分类 */}
                     <div className="flex items-center justify-between p-3.5">
                       <span className="text-xs font-bold text-slate-800">日历分类</span>
-                      <select 
+                      <select
                         value={category}
                         onChange={e => setCategory(e.target.value as TaskCategory)}
                         className="text-xs bg-slate-50 border border-slate-100 rounded-lg p-1 px-2 text-slate-850 focus:outline-none font-bold"
@@ -1613,7 +1604,7 @@ export default function App() {
                       </select>
                     </div>
 
-                    {/* Priority Level Selection Row */}
+                    {/* 优先级 */}
                     <div className="flex items-center justify-between p-3.5">
                       <span className="text-xs font-bold text-slate-800">优先级等级</span>
                       <div className="flex gap-1.5">
@@ -1625,8 +1616,8 @@ export default function App() {
                               key={lvl}
                               onClick={() => setPriority(lvl)}
                               className={`py-1 px-2.5 rounded-lg text-[10px] font-bold tracking-tight transition-all ${
-                                isSel 
-                                  ? 'bg-slate-900 text-white' 
+                                isSel
+                                  ? 'bg-slate-900 text-white'
                                   : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                               }`}
                             >
@@ -1638,7 +1629,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* CARD 3: Feishu-Style Repetition Configuration Module */}
+                  {/* 卡片3: 重复规则设置 */}
                   <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 space-y-4">
                     <div className="space-y-1.5 font-sans">
                       <div className="flex items-center justify-between">
@@ -1771,11 +1762,11 @@ export default function App() {
 
                     {presetType !== 'none' && (
                       <div className="space-y-4 border-t border-slate-100 pt-4 font-sans">
-                        {/* Interactive natural translation preview bar */}
+                        {/* 重复规则文字预览 */}
                         <div className="p-3 bg-indigo-50/60 rounded-xl border border-indigo-100 flex items-start gap-2">
                           <span className="text-base shrink-0 mt-0.5">💡</span>
                           <div className="space-y-0.5">
-                            <span className="text-[10px] font-bold text-indigo-400 block uppercase">飞书建档重复解析</span>
+                            <span className="text-[10px] font-bold text-indigo-400 block uppercase">重复解析预览</span>
                             <p className="text-[11px] leading-relaxed font-semibold text-indigo-950 font-sans italic">
                               "{liveRecurrencePreview}"
                             </p>
@@ -1785,9 +1776,8 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* CARD 4: Elegant Reminder Settings */}
+                  {/* 卡片4: 提醒设置 */}
                   <div className="bg-white rounded-2xl shadow-sm border border-slate-100 divide-y divide-slate-100 overflow-hidden">
-                    {/* Header */}
                     <div className="p-3.5 bg-slate-50/50 flex items-center justify-between">
                       <label className="text-[10px] font-bold uppercase tracking-widest text-[#8A94A6] flex items-center gap-1.5">
                         <BellRing className="w-3.5 h-3.5 text-slate-700 animate-bounce" />
@@ -1833,9 +1823,9 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Primary submit action on form bottom as double confirm */}
-                  <button 
-                    type="submit" 
+                  {/* 提交按钮 */}
+                  <button
+                    type="submit"
                     className="w-full py-3 bg-slate-950 font-bold hover:bg-black text-white rounded-xl text-xs transition-colors shadow-lg active:scale-99"
                   >
                     {editingTask ? '确认更新整个日程系列' : '确认并保存日程到列表中'}
@@ -1847,11 +1837,11 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {/* DIALOG 2: Elegant slide-up alert for handling single vs complete recurring delete options */}
+        {/* 弹窗2: 循环日程删除选项 */}
         <AnimatePresence>
           {selectedTaskForDelete && (
             <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center p-6">
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
@@ -1863,43 +1853,43 @@ export default function App() {
 
                 <div className="space-y-1">
                   <h3 className="text-base font-bold text-slate-950">
-                    {selectedTaskForDelete.task.recurrence.frequency === 'none' ? '删除当前日程' : '飞书重复关系处理'}
+                    {selectedTaskForDelete.task.recurrence.frequency === 'none' ? '删除当前日程' : '重复关系处理'}
                   </h3>
                   <p className="text-[12px] text-slate-500 leading-relaxed max-w-xs mx-auto">
                     您正在点击处理日程 <b>{selectedTaskForDelete.task.title}</b>。
-                    {selectedTaskForDelete.task.recurrence.frequency !== 'none' && '这是一个具备周期循环的飞书日历项。'}
+                    {selectedTaskForDelete.task.recurrence.frequency !== 'none' && '这是一个周期循环日程。'}
                   </p>
                 </div>
 
                 <div className="flex flex-col gap-2 mt-2">
                   {selectedTaskForDelete.task.recurrence.frequency !== 'none' ? (
                     <>
-                      <button 
+                      <button
                         onClick={handleDeleteOccurrenceOnly}
                         className="py-2.5 px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-2xl text-left transition-colors flex flex-col gap-0.5"
                       >
                         <span className="font-bold text-slate-800 text-[12px]">此日程</span>
-                        <span className="text-[10px] text-slate-400 font-normal leading-normal">仅删除、退出当前日程，不影响重复性日程中的其它日程。</span>
+                        <span className="text-[10px] text-slate-400 font-normal leading-normal">仅删除当前日程，不影响系列中其他日程。</span>
                       </button>
-                      
-                      <button 
+
+                      <button
                         onClick={handleDeleteThisAndFollowing}
                         className="py-2.5 px-3 bg-amber-50/50 hover:bg-amber-100/60 border border-amber-200/60 rounded-2xl text-left transition-colors flex flex-col gap-0.5"
                       >
                         <span className="font-bold text-amber-900 text-[12px]">此日程及后续日程</span>
-                        <span className="text-[10px] text-amber-700/80 font-normal leading-normal">删除、退出当前日程及重复性日程中的后续日程，不影响之前日程。</span>
+                        <span className="text-[10px] text-amber-700/80 font-normal leading-normal">删除当前及后续日程，不影响之前日程。</span>
                       </button>
 
-                      <button 
+                      <button
                         onClick={handleDeleteEntireSeries}
                         className="py-2.5 px-3 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-2xl text-left transition-colors flex flex-col gap-0.5 shadow-sm"
                       >
                         <span className="font-bold text-rose-950 text-[12px]">所有日程</span>
-                        <span className="text-[10px] text-rose-600/80 font-normal leading-normal">删除、退出重复性日程中的所有日程。</span>
+                        <span className="text-[10px] text-rose-600/80 font-normal leading-normal">删除系列中的所有日程。</span>
                       </button>
                     </>
                   ) : (
-                    <button 
+                    <button
                       onClick={handleDeleteEntireSeries}
                       className="py-2.5 bg-rose-600 hover:bg-rose-700 font-semibold rounded-xl text-xs text-white transition-colors"
                     >
@@ -1907,7 +1897,7 @@ export default function App() {
                     </button>
                   )}
 
-                  <button 
+                  <button
                     onClick={() => setSelectedTaskForDelete(null)}
                     className="py-2.5 mt-1 bg-white border border-slate-200 font-medium rounded-xl text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors"
                   >
@@ -1919,10 +1909,10 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {/* DIALOG 3: High-Fidelity Active Floating Alarm / Notification Modal */}
+        {/* 弹窗3: 提醒通知 */}
         <AnimatePresence>
           {activeAlert && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -1935,7 +1925,7 @@ export default function App() {
                 transition={{ type: 'spring', damping: 25, stiffness: 350 }}
                 className="w-full max-w-[310px] bg-white rounded-3xl p-5 shadow-2x flex flex-col items-center text-center space-y-4 border border-slate-100"
               >
-                {/* Ringing Visual Chime */}
+                {/* 铃声动画 */}
                 <div className="relative">
                   <div className="absolute inset-0 bg-[#FF9500]/25 rounded-full animate-ping scale-150 duration-1000"></div>
                   <div className="w-14 h-14 bg-gradient-to-tr from-[#FF9500] to-[#FFCC00] rounded-full flex items-center justify-center text-white shadow-lg animate-bounce duration-500">
@@ -1943,10 +1933,10 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Alarm Details */}
+                {/* 提醒详情 */}
                 <div className="space-y-1 w-full">
                   <span className="text-[9px] font-extrabold text-amber-500 uppercase tracking-widest bg-amber-50 px-2.5 py-0.5 rounded-full inline-block">
-                    ⏱️ 飞书时间提醒
+                    ⏱️ 时间提醒
                   </span>
                   <h3 className="text-base font-extrabold text-slate-900 tracking-tight leading-tight pt-1">
                     {activeAlert.task.title}
@@ -1958,7 +1948,7 @@ export default function App() {
                   )}
                 </div>
 
-                {/* Event Time & Schedule Attributes */}
+                {/* 日程信息 */}
                 <div className="w-full bg-slate-50 rounded-2xl p-3 space-y-1 border border-slate-100 text-left">
                   <div className="flex items-center justify-between text-[11px] font-semibold">
                     <span className="text-slate-400">预设日期</span>
@@ -1978,14 +1968,11 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Actions */}
+                {/* 操作按钮 */}
                 <div className="w-full flex flex-col gap-1.5 pt-1 font-sans">
                   <button
                     type="button"
-                    onClick={() => {
-                      // Discard / Dismiss the active alert
-                      setActiveAlert(null);
-                    }}
+                    onClick={() => setActiveAlert(null)}
                     className="w-full py-2.5 bg-slate-950 font-bold hover:bg-black text-white text-[11px] rounded-xl shadow-md transition-all active:scale-98"
                   >
                     我知道了 (已读)
@@ -1993,13 +1980,11 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => {
-                      // Snooze feature - adds key to snoozed list with target 5-minute cooldown timestamp
                       const instanceKey = `${activeAlert.task.id}-${activeAlert.instanceDate}`;
                       setSnoozedAlerts(prev => ({
                         ...prev,
-                        [instanceKey]: Date.now() + 5 * 60 * 1000 // 5 minutes snooze from now
+                        [instanceKey]: Date.now() + 5 * 60 * 1000,
                       }));
-                      
                       setActiveAlert(null);
                     }}
                     className="w-full py-2 bg-slate-100 font-bold hover:bg-slate-200 text-slate-700 text-[11px] rounded-xl transition-all"
@@ -2012,10 +1997,10 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {/* DIALOG 4: Vertical Scroll Wheel / Roller Time Picker Modal */}
+        {/* 弹窗4: 滚轮时间选择器 */}
         <AnimatePresence>
           {activeTimePicker && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -2030,10 +2015,10 @@ export default function App() {
                 className="w-full max-w-[400px] bg-white rounded-t-3xl pb-8 p-5 shadow-2xl border-t border-slate-100 flex flex-col space-y-4"
                 onClick={e => e.stopPropagation()}
               >
-                {/* Header Actions */}
+                {/* 头栏 */}
                 <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={() => setActiveTimePicker(null)}
                     className="text-xs font-bold text-slate-400 hover:text-slate-600 px-2 py-1 transition-colors"
                   >
@@ -2043,14 +2028,13 @@ export default function App() {
                     <Clock className="w-3.5 h-3.5 text-indigo-500" />
                     <span>设置{activeTimePicker === 'start' ? '开始时间' : '结束时间'}</span>
                   </span>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={() => {
                       const formattedTime = `${tempHour}:${tempMinute}`;
                       if (activeTimePicker === 'start') {
                         setStartTime(formattedTime);
-                        
-                        // Automatically offset end-time by 1 hour to prevent invalid ranges (Feishu UX best outcome)
+                        // 自动将结束时间偏移 +1 小时（防止起始时间晚于结束时间）
                         const [h, m] = formattedTime.split(':').map(Number);
                         const endH = (h + 1) % 24;
                         const endStr = `${endH.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
@@ -2066,10 +2050,10 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Roller Reels Row */}
+                {/* 滚轮 — 小时 + 分钟 */}
                 <div className="grid grid-cols-2 gap-4 py-2 justify-center relative">
-                  
-                  {/* Hours Reel */}
+
+                  {/* 小时滚轮 */}
                   <div className="flex flex-col items-center">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 font-sans">小时</span>
                     
@@ -2087,8 +2071,8 @@ export default function App() {
                       <ChevronUp className="w-5 h-5 stroke-[2.5]" />
                     </button>
 
-                    {/* Scrollable Container */}
-                    <div 
+                    {/* 数字列表（可点击） */}
+                    <div
                       ref={hourContainerRef}
                       style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                       className="w-24 h-44 overflow-y-auto flex flex-col items-center relative bg-slate-50/70 rounded-2xl border border-slate-100 py-1 font-mono gap-1 select-none"
@@ -2102,8 +2086,8 @@ export default function App() {
                             type="button"
                             onClick={() => setTempHour(valStr)}
                             className={`w-16 py-2.5 text-center text-sm font-bold rounded-xl transition-all shrink-0 cursor-pointer ${
-                              isSelected 
-                                ? 'bg-indigo-600 text-white shadow-md scale-110 ring-2 ring-indigo-100' 
+                              isSelected
+                                ? 'bg-indigo-600 text-white shadow-md scale-110 ring-2 ring-indigo-100'
                                 : 'text-slate-400 hover:text-slate-700 hover:bg-slate-200/40 text-xs'
                             }`}
                           >
@@ -2113,11 +2097,11 @@ export default function App() {
                       })}
                     </div>
 
-                    {/* Down button - wraps around */}
-                    <button 
+                    {/* 下按钮（循环） */}
+                    <button
                       type="button"
                       onClick={() => {
-                        setTempHour(prev => {
+                        setTempHour((prev) => {
                           const val = (parseInt(prev, 10) + 1) % 24;
                           return val.toString().padStart(2, '0');
                         });
@@ -2128,15 +2112,15 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* Minutes Reel */}
+                  {/* 分钟滚轮 */}
                   <div className="flex flex-col items-center">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 font-sans">分钟</span>
-                    
-                    {/* Up button - wraps around */}
-                    <button 
+
+                    {/* 上按钮（循环） */}
+                    <button
                       type="button"
                       onClick={() => {
-                        setTempMinute(prev => {
+                        setTempMinute((prev) => {
                           const val = (parseInt(prev, 10) - 1 + 60) % 60;
                           return val.toString().padStart(2, '0');
                         });
@@ -2146,8 +2130,8 @@ export default function App() {
                       <ChevronUp className="w-5 h-5 stroke-[2.5]" />
                     </button>
 
-                    {/* Scrollable Container */}
-                    <div 
+                    {/* 数字列表（可点击） */}
+                    <div
                       ref={minuteContainerRef}
                       style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                       className="w-24 h-44 overflow-y-auto flex flex-col items-center relative bg-slate-50/70 rounded-2xl border border-slate-100 py-1 font-mono gap-1 select-none"
@@ -2161,8 +2145,8 @@ export default function App() {
                             type="button"
                             onClick={() => setTempMinute(valStr)}
                             className={`w-16 py-2.5 text-center text-sm font-bold rounded-xl transition-all shrink-0 cursor-pointer ${
-                              isSelected 
-                                ? 'bg-indigo-600 text-white shadow-md scale-110 ring-2 ring-indigo-100' 
+                              isSelected
+                                ? 'bg-indigo-600 text-white shadow-md scale-110 ring-2 ring-indigo-100'
                                 : 'text-slate-400 hover:text-slate-700 hover:bg-slate-200/40 text-xs'
                             }`}
                           >
@@ -2172,11 +2156,11 @@ export default function App() {
                       })}
                     </div>
 
-                    {/* Down button - wraps around */}
-                    <button 
+                    {/* 下按钮（循环） */}
+                    <button
                       type="button"
                       onClick={() => {
-                        setTempMinute(prev => {
+                        setTempMinute((prev) => {
                           const val = (parseInt(prev, 10) + 1) % 60;
                           return val.toString().padStart(2, '0');
                         });
@@ -2189,7 +2173,6 @@ export default function App() {
 
                 </div>
 
-                {/* Premium tactile prompt */}
                 <p className="text-[10px] text-center text-slate-400 font-medium">
                   💡 支持上下按钮无限循环 (59 ▲ 00 / 00 ▼ 59) 或点击数字直达
                 </p>
