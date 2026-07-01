@@ -18,6 +18,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { Filesystem, Directory } from '@capacitor/filesystem';
 import { 
   Calendar as CalendarIcon, 
   CheckSquare, 
@@ -960,13 +961,56 @@ export default function App() {
     other: { label: '其他', bg: 'bg-[#F8FAFC]', text: 'text-[#475569]', border: 'border-[#E2E8F0]', dot: 'bg-slate-400' },
   };
 
-  // 调试日志：写入本地文件 lumina_debug.log
+  // 调试日志：写入手机本地文件 lumina_debug.log
+  // 文件位于 Android: /data/data/com.luminacalendar.app/files/lumina_debug.log
+  // 可通过 adb pull 或文件管理器导出
   useEffect(() => {
+    const LOG_FILE = 'lumina_debug.log';
     const logQueue: string[] = [];
     let flushTimer: ReturnType<typeof setInterval> | null = null;
+    const MAX_FILE_LINES = 2000; // 文件最多保留 2000 行，超出自动截断
 
     const appendLog = (msg: string) => {
       logQueue.push(msg);
+    };
+
+    const flush = async () => {
+      if (logQueue.length === 0) return;
+      const batch = logQueue.splice(0);
+      try {
+        await Filesystem.appendFile({
+          path: LOG_FILE,
+          data: batch.join(''),
+          directory: Directory.Data,
+        });
+        // 检查文件大小，超过上限就截断保留最新行
+        const stat = await Filesystem.stat({
+          path: LOG_FILE,
+          directory: Directory.Data,
+        });
+        if (stat.size && stat.size > 100 * 1024) {
+          const content = await Filesystem.readFile({
+            path: LOG_FILE,
+            directory: Directory.Data,
+          });
+          const text = content.data as string;
+          const lines = text.split('\n').filter(l => l.trim());
+          if (lines.length > MAX_FILE_LINES) {
+            await Filesystem.writeFile({
+              path: LOG_FILE,
+              data: lines.slice(-MAX_FILE_LINES).join('\n'),
+              directory: Directory.Data,
+              recursive: true,
+            });
+          }
+        }
+      } catch (e) {
+        // 写文件失败时退到 safeStorage
+        originalError('[log-fs-fail]', e);
+        const prev = safeStorage.getItem('lumina_debug_log') || '';
+        const lines = (prev + batch.join('')).split('\n').filter(l => l.trim());
+        safeStorage.setItem('lumina_debug_log', lines.slice(-500).join('\n'));
+      }
     };
 
     // 拦截 console 输出写入文件队列
@@ -993,15 +1037,8 @@ export default function App() {
     window.addEventListener('error', onErr);
     window.addEventListener('unhandledrejection', onRejection);
 
-    // 每 5 秒将队列 flush 到 storage
-    flushTimer = setInterval(() => {
-      if (logQueue.length === 0) return;
-      const batch = logQueue.splice(0);
-      const prev = safeStorage.getItem('lumina_debug_log') || '';
-      // 保留最近 500 行
-      const lines = (prev + batch.join('')).split('\n').filter(l => l.trim());
-      safeStorage.setItem('lumina_debug_log', lines.slice(-500).join('\n'));
-    }, 5000);
+    // 每 5 秒将队列 flush 到文件
+    flushTimer = setInterval(flush, 5000);
 
     return () => {
       console.log = originalLog;
@@ -1011,11 +1048,7 @@ export default function App() {
       window.removeEventListener('unhandledrejection', onRejection);
       if (flushTimer) clearInterval(flushTimer);
       // 最后 flush 残留
-      if (logQueue.length > 0) {
-        const prev = safeStorage.getItem('lumina_debug_log') || '';
-        const lines = (prev + logQueue.join('')).split('\n').filter(l => l.trim());
-        safeStorage.setItem('lumina_debug_log', lines.slice(-500).join('\n'));
-      }
+      flush();
     };
   }, []);
 
