@@ -48,6 +48,22 @@ jobs:
       - name: Sync Web assets to Android Native
         run: npx cap sync android
 
+      - name: Enable WebView debugging for debug builds
+        run: |
+          # Ensure android:debuggable="true" and WebView debugging in AndroidManifest.xml
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST" ]; then
+            # Add android:debuggable="true" to <application> if not present
+            if ! grep -q 'android:debuggable="true"' "$MANIFEST"; then
+              sed -i 's/<application/<application android:debuggable="true" /' "$MANIFEST"
+            fi
+            # Add android:usesCleartextTraffic="true" for allowCleartext
+            if ! grep -q 'android:usesCleartextTraffic="true"' "$MANIFEST"; then
+              sed -i 's/<application/<application android:usesCleartextTraffic="true" /' "$MANIFEST"
+            fi
+            echo "AndroidManifest.xml patched for debugging"
+          fi
+
       - name: Ensure gradlew is executable
         run: chmod +x android/gradlew
 

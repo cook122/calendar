@@ -3,12 +3,17 @@
   "appName": "Lumina Calendar",
   "webDir": "dist",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "allowCleartext": true
   },
   "plugins": {
     "StatusBar": {
       "overlaysWebView": false,
       "style": "DARK"
     }
+  },
+  "android": {
+    "allowMixedContent": true,
+    "webContentsDebuggingEnabled": true
   }
 }

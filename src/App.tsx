@@ -1,3 +1,5 @@
+// 该项目通过 GitHub Actions 构建，本地不要构建
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -957,6 +959,65 @@ export default function App() {
     habit: { label: '习惯', bg: 'bg-[#ECFDF5]', text: 'text-[#065F46]', border: 'border-[#D1FAE5]', dot: 'bg-emerald-500' },
     other: { label: '其他', bg: 'bg-[#F8FAFC]', text: 'text-[#475569]', border: 'border-[#E2E8F0]', dot: 'bg-slate-400' },
   };
+
+  // 调试日志：写入本地文件 lumina_debug.log
+  useEffect(() => {
+    const logQueue: string[] = [];
+    let flushTimer: ReturnType<typeof setInterval> | null = null;
+
+    const appendLog = (msg: string) => {
+      logQueue.push(msg);
+    };
+
+    // 拦截 console 输出写入文件队列
+    const originalLog = console.log;
+    const originalWarn = console.warn;
+    const originalError = console.error;
+    const handler = (level: string, orig: (...args: any[]) => void) => (...args: any[]) => {
+      orig(...args);
+      const ts = new Date().toISOString();
+      const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a).slice(0, 300) : String(a))).join(' ');
+      appendLog(`[${ts}] [${level}] ${msg}\n`);
+    };
+    console.log = handler('LOG', originalLog);
+    console.warn = handler('WARN', originalWarn);
+    console.error = handler('ERR', originalError);
+
+    // 全局错误捕获
+    const onErr = (e: ErrorEvent) => {
+      appendLog(`[${new Date().toISOString()}] [FATAL] ${e.message} @ ${e.filename}:${e.lineno}\n`);
+    };
+    const onRejection = (e: PromiseRejectionEvent) => {
+      appendLog(`[${new Date().toISOString()}] [PROMISE] ${String(e.reason)}\n`);
+    };
+    window.addEventListener('error', onErr);
+    window.addEventListener('unhandledrejection', onRejection);
+
+    // 每 5 秒将队列 flush 到 storage
+    flushTimer = setInterval(() => {
+      if (logQueue.length === 0) return;
+      const batch = logQueue.splice(0);
+      const prev = safeStorage.getItem('lumina_debug_log') || '';
+      // 保留最近 500 行
+      const lines = (prev + batch.join('')).split('\n').filter(l => l.trim());
+      safeStorage.setItem('lumina_debug_log', lines.slice(-500).join('\n'));
+    }, 5000);
+
+    return () => {
+      console.log = originalLog;
+      console.warn = originalWarn;
+      console.error = originalError;
+      window.removeEventListener('error', onErr);
+      window.removeEventListener('unhandledrejection', onRejection);
+      if (flushTimer) clearInterval(flushTimer);
+      // 最后 flush 残留
+      if (logQueue.length > 0) {
+        const prev = safeStorage.getItem('lumina_debug_log') || '';
+        const lines = (prev + logQueue.join('')).split('\n').filter(l => l.trim());
+        safeStorage.setItem('lumina_debug_log', lines.slice(-500).join('\n'));
+      }
+    };
+  }, []);
 
 
   return (
